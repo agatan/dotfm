@@ -4,7 +4,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use log::debug;
+use log::{debug, info};
 use structopt::StructOpt;
 
 #[derive(Debug)]
@@ -104,6 +104,7 @@ struct CloneOptions {
 
 fn do_clone(path: &DotfilesPath, options: &CloneOptions) -> Result<(), Error> {
     let github_url = format!("git@github.com:{}/{}", options.user, options.repo);
+    info!("execute command: git clone {} {}", github_url, path.0);
     let status = Command::new("git")
         .arg("clone")
         .arg(&github_url)
