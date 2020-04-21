@@ -122,11 +122,6 @@ fn do_clone(path: &DotfilesPath, options: &CloneOptions) -> Result<(), Error> {
     Ok(())
 }
 
-#[derive(Debug, StructOpt)]
-struct GitOptions {
-    args: Vec<String>,
-}
-
 struct DirGuard {
     original: PathBuf,
 }
@@ -151,9 +146,10 @@ impl Drop for DirGuard {
     }
 }
 
-fn do_git(path: &DotfilesPath, options: &GitOptions) -> Result<(), Error> {
+fn do_git(path: &DotfilesPath, options: &[String]) -> Result<(), Error> {
+    assert_eq!(options[0], "git");
     let _guard = DirGuard::new(&path.0)?;
-    let status = Command::new("git").args(&options.args).status()?;
+    let status = Command::new("git").args(&options[1..]).status()?;
     if !status.success() {
         return Err(Error::CommandFailed(
             "failed to exec the git command",
@@ -205,7 +201,8 @@ fn do_commit(path: &DotfilesPath, options: &CommitOptions) -> Result<(), Error> 
 #[derive(Debug, StructOpt)]
 enum SubCommand {
     Clone(CloneOptions),
-    Git(GitOptions),
+    #[structopt(external_subcommand)]
+    Git(Vec<String>),
     Edit(EditOptions),
     Commit(CommitOptions),
 }
