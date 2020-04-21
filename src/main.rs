@@ -5,6 +5,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use ignore::overrides::OverrideBuilder;
+use ignore::{self, WalkBuilder};
 use log::{debug, info};
 use structopt::StructOpt;
 
@@ -13,6 +15,7 @@ pub enum Error {
     CommandFailed(&'static str, std::process::ExitStatus),
     Io(io::Error),
     Env(&'static str, env::VarError),
+    Ignore(ignore::Error),
     Dyn(Box<dyn std::error::Error>),
 }
 
@@ -23,6 +26,7 @@ impl fmt::Display for Error {
             CommandFailed(ref s, ref status) => write!(f, "{}: {}", s, status),
             Io(ref err) => write!(f, "{}", err),
             Env(s, ref err) => write!(f, "failed to get ${}: {}", s, err),
+            Ignore(ref err) => write!(f, "{}", err),
             Dyn(ref err) => write!(f, "{}", err),
         }
     }
@@ -34,6 +38,12 @@ impl From<io::Error> for Error {
     }
 }
 
+impl From<ignore::Error> for Error {
+    fn from(value: ignore::Error) -> Self {
+        Error::Ignore(value)
+    }
+}
+
 impl From<Box<dyn std::error::Error>> for Error {
     fn from(value: Box<dyn std::error::Error>) -> Self {
         Error::Dyn(value)
@@ -42,6 +52,24 @@ impl From<Box<dyn std::error::Error>> for Error {
 
 #[derive(Debug)]
 struct DotfilesPath(String);
+
+impl DotfilesPath {
+    fn as_str(&self) -> &str {
+        self.as_ref()
+    }
+}
+
+impl AsRef<Path> for DotfilesPath {
+    fn as_ref(&self) -> &Path {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<str> for DotfilesPath {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
 
 impl Default for DotfilesPath {
     fn default() -> Self {
@@ -107,11 +135,11 @@ struct CloneOptions {
 
 fn do_clone(path: &DotfilesPath, options: &CloneOptions) -> Result<(), Error> {
     let github_url = format!("git@github.com:{}/{}", options.user, options.repo);
-    info!("execute command: git clone {} {}", github_url, path.0);
+    info!("execute command: git clone {} {}", github_url, path);
     let status = Command::new("git")
         .arg("clone")
         .arg(&github_url)
-        .arg(path.0.as_str())
+        .arg(path.as_str())
         .status()?;
     if !status.success() {
         return Err(Error::CommandFailed(
@@ -148,7 +176,7 @@ impl Drop for DirGuard {
 
 fn do_git(path: &DotfilesPath, options: &[String]) -> Result<(), Error> {
     assert_eq!(options[0], "git");
-    let _guard = DirGuard::new(&path.0)?;
+    let _guard = DirGuard::new(path)?;
     let status = Command::new("git").args(&options[1..]).status()?;
     if !status.success() {
         return Err(Error::CommandFailed(
@@ -165,7 +193,7 @@ struct EditOptions {
 }
 
 fn do_edit(path: &DotfilesPath, options: &EditOptions) -> Result<(), Error> {
-    let _guard = DirGuard::new(&path.0)?;
+    let _guard = DirGuard::new(path)?;
     let editor = env::var("EDITOR").map_err(|err| Error::Env("EDITOR", err))?;
     let status = Command::new(editor).arg(&options.filename).status()?;
     if !status.success() {
@@ -182,7 +210,7 @@ struct CommitOptions {
 }
 
 fn do_commit(path: &DotfilesPath, options: &CommitOptions) -> Result<(), Error> {
-    let _guard = DirGuard::new(&path.0)?;
+    let _guard = DirGuard::new(path)?;
     let status = if let Some(ref message) = options.messege {
         let args = &["commit", "-A", "-m", message];
         info!("execute command: git commit -A -m {:?}", message);
@@ -198,6 +226,31 @@ fn do_commit(path: &DotfilesPath, options: &CommitOptions) -> Result<(), Error> 
     Ok(())
 }
 
+fn do_list(path: &DotfilesPath) -> Result<(), Error> {
+    let overrides = OverrideBuilder::new(path)
+        .add("!/.git")?
+        .add("!/.dotfmignore")?
+        .build()?;
+    let walk = WalkBuilder::new(path)
+        .hidden(false) // Do not ignore hidden files
+        .add_custom_ignore_filename(".dotfmignore")
+        .overrides(overrides)
+        .sort_by_file_path(|p1, p2| p1.cmp(p2))
+        .build();
+    for p in walk {
+        let p = p?;
+        if p.path_is_symlink() || p.path().is_dir() {
+            continue;
+        }
+        let p = p
+            .path()
+            .strip_prefix(path)
+            .expect("each entry must start with the base path");
+        println!("{}", p.display());
+    }
+    Ok(())
+}
+
 #[derive(Debug, StructOpt)]
 enum SubCommand {
     Clone(CloneOptions),
@@ -205,6 +258,7 @@ enum SubCommand {
     Git(Vec<String>),
     Edit(EditOptions),
     Commit(CommitOptions),
+    List,
 }
 
 #[derive(Debug, StructOpt)]
@@ -222,6 +276,7 @@ fn run(command: &DotfmCommand) -> Result<(), Error> {
         SubCommand::Git(ref git_opts) => do_git(&command.path, git_opts),
         SubCommand::Edit(ref edit_opts) => do_edit(&command.path, edit_opts),
         SubCommand::Commit(ref commit_opts) => do_commit(&command.path, commit_opts),
+        SubCommand::List => do_list(&command.path),
     }
 }
 
