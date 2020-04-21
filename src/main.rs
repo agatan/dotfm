@@ -1,4 +1,5 @@
 use std::convert::From;
+use std::env;
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -11,16 +12,18 @@ use structopt::StructOpt;
 pub enum Error {
     CommandFailed(&'static str, std::process::ExitStatus),
     Io(io::Error),
+    Env(&'static str, env::VarError),
     Dyn(Box<dyn std::error::Error>),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Error::*;
-        match self {
-            CommandFailed(s, status) => write!(f, "{}: {}", s, status),
-            Io(err) => write!(f, "{}", err),
-            Dyn(err) => write!(f, "{}", err),
+        match *self {
+            CommandFailed(ref s, ref status) => write!(f, "{}: {}", s, status),
+            Io(ref err) => write!(f, "{}", err),
+            Env(s, ref err) => write!(f, "failed to get ${}: {}", s, err),
+            Dyn(ref err) => write!(f, "{}", err),
         }
     }
 }
@@ -73,7 +76,7 @@ impl Default for User {
             let s = String::from_utf8_lossy(&s.stdout);
             return User(s.trim().to_string());
         }
-        if let Ok(s) = std::env::var("USER") {
+        if let Ok(s) = env::var("USER") {
             return User(s);
         }
         User("".to_owned())
@@ -130,16 +133,21 @@ struct DirGuard {
 
 impl DirGuard {
     fn new<P: AsRef<Path>>(in_dir: P) -> Result<Self, Error> {
-        let original = std::env::current_dir()?;
-        std::env::set_current_dir(in_dir.as_ref())?;
+        let original = env::current_dir()?;
+        debug!(
+            "move from {} to {}",
+            original.to_string_lossy(),
+            in_dir.as_ref().to_string_lossy()
+        );
+        env::set_current_dir(in_dir.as_ref())?;
         Ok(Self { original })
     }
 }
 
 impl Drop for DirGuard {
     fn drop(&mut self) {
-        std::env::set_current_dir(self.original.as_path())
-            .expect("failed to reset current directory")
+        debug!("back to {}", self.original.to_string_lossy());
+        env::set_current_dir(self.original.as_path()).expect("failed to reset current directory")
     }
 }
 
@@ -156,9 +164,25 @@ fn do_git(path: &DotfilesPath, options: &GitOptions) -> Result<(), Error> {
 }
 
 #[derive(Debug, StructOpt)]
+struct EditOptions {
+    filename: String,
+}
+
+fn do_edit(path: &DotfilesPath, options: &EditOptions) -> Result<(), Error> {
+    let _guard = DirGuard::new(&path.0)?;
+    let editor = env::var("EDITOR").map_err(|err| Error::Env("EDITOR", err))?;
+    let status = Command::new(editor).arg(&options.filename).status()?;
+    if !status.success() {
+        return Err(Error::CommandFailed("failed to edit the file", status));
+    }
+    Ok(())
+}
+
+#[derive(Debug, StructOpt)]
 enum SubCommand {
     Clone(CloneOptions),
     Git(GitOptions),
+    Edit(EditOptions),
 }
 
 #[derive(Debug, StructOpt)]
@@ -174,6 +198,7 @@ fn run(command: &DotfmCommand) -> Result<(), Error> {
     match command.sub_command {
         SubCommand::Clone(ref clone_opts) => do_clone(&command.path, clone_opts),
         SubCommand::Git(ref git_opts) => do_git(&command.path, git_opts),
+        SubCommand::Edit(ref edit_opts) => do_edit(&command.path, edit_opts),
     }
 }
 
