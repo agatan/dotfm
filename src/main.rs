@@ -179,10 +179,35 @@ fn do_edit(path: &DotfilesPath, options: &EditOptions) -> Result<(), Error> {
 }
 
 #[derive(Debug, StructOpt)]
+/// Add all dirty files, then create a commit.
+struct CommitOptions {
+    #[structopt(long, short)]
+    messege: Option<String>,
+}
+
+fn do_commit(path: &DotfilesPath, options: &CommitOptions) -> Result<(), Error> {
+    let _guard = DirGuard::new(&path.0)?;
+    let status = if let Some(ref message) = options.messege {
+        let args = &["commit", "-A", "-m", message];
+        info!("execute command: git commit -A -m {:?}", message);
+        Command::new("git").args(args).status()?
+    } else {
+        let args = &["commit", "-A"];
+        info!("execute command: git commit -A");
+        Command::new("git").args(args).status()?
+    };
+    if !status.success() {
+        return Err(Error::CommandFailed("failed to commit", status));
+    }
+    Ok(())
+}
+
+#[derive(Debug, StructOpt)]
 enum SubCommand {
     Clone(CloneOptions),
     Git(GitOptions),
     Edit(EditOptions),
+    Commit(CommitOptions),
 }
 
 #[derive(Debug, StructOpt)]
@@ -199,6 +224,7 @@ fn run(command: &DotfmCommand) -> Result<(), Error> {
         SubCommand::Clone(ref clone_opts) => do_clone(&command.path, clone_opts),
         SubCommand::Git(ref git_opts) => do_git(&command.path, git_opts),
         SubCommand::Edit(ref edit_opts) => do_edit(&command.path, edit_opts),
+        SubCommand::Commit(ref commit_opts) => do_commit(&command.path, commit_opts),
     }
 }
 
