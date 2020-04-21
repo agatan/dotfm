@@ -1,18 +1,39 @@
+use std::convert::From;
 use std::fmt;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+use log::debug;
 use structopt::StructOpt;
 
 #[derive(Debug)]
 pub enum Error {
-    BaseDirUnspecified,
+    CommandFailed(&'static str, std::process::ExitStatus),
+    Io(io::Error),
+    Dyn(Box<dyn std::error::Error>),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Error::*;
         match self {
-            BaseDirUnspecified => f.write_str("dotfiles base directory is unspecified"),
+            CommandFailed(s, status) => write!(f, "{}: {}", s, status),
+            Io(err) => write!(f, "{}", err),
+            Dyn(err) => write!(f, "{}", err),
         }
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(value: io::Error) -> Self {
+        Error::Io(value)
+    }
+}
+
+impl From<Box<dyn std::error::Error>> for Error {
+    fn from(value: Box<dyn std::error::Error>) -> Self {
+        Error::Dyn(value)
     }
 }
 
@@ -81,20 +102,62 @@ struct CloneOptions {
     repo: String,
 }
 
-fn do_clone(path: &DotfilesPath, options: &CloneOptions) -> Result<(), Box<dyn std::error::Error>> {
+fn do_clone(path: &DotfilesPath, options: &CloneOptions) -> Result<(), Error> {
     let github_url = format!("git@github.com:{}/{}", options.user, options.repo);
-    Command::new("git")
+    let status = Command::new("git")
         .arg("clone")
         .arg(&github_url)
         .arg(path.0.as_str())
         .status()?;
+    if !status.success() {
+        return Err(Error::CommandFailed(
+            "failed to clone the repository",
+            status,
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Debug, StructOpt)]
+struct GitOptions {
+    args: Vec<String>,
+}
+
+struct DirGuard {
+    original: PathBuf,
+}
+
+impl DirGuard {
+    fn new<P: AsRef<Path>>(in_dir: P) -> Result<Self, Error> {
+        let original = std::env::current_dir()?;
+        std::env::set_current_dir(in_dir.as_ref())?;
+        Ok(Self { original })
+    }
+}
+
+impl Drop for DirGuard {
+    fn drop(&mut self) {
+        std::env::set_current_dir(self.original.as_path())
+            .expect("failed to reset current directory")
+    }
+}
+
+fn do_git(path: &DotfilesPath, options: &GitOptions) -> Result<(), Error> {
+    let _guard = DirGuard::new(&path.0)?;
+    let status = Command::new("git").args(&options.args).status()?;
+    if !status.success() {
+        return Err(Error::CommandFailed(
+            "failed to exec the git command",
+            status,
+        ));
+    }
     Ok(())
 }
 
 #[derive(Debug, StructOpt)]
 enum SubCommand {
-    #[structopt(name = "clone")]
     Clone(CloneOptions),
+    Git(GitOptions),
 }
 
 #[derive(Debug, StructOpt)]
@@ -106,14 +169,17 @@ struct DotfmCommand {
     sub_command: SubCommand,
 }
 
-fn run(command: &DotfmCommand) -> Result<(), Box<dyn std::error::Error>> {
+fn run(command: &DotfmCommand) -> Result<(), Error> {
     match command.sub_command {
         SubCommand::Clone(ref clone_opts) => do_clone(&command.path, clone_opts),
+        SubCommand::Git(ref git_opts) => do_git(&command.path, git_opts),
     }
 }
 
 fn main() {
+    env_logger::init();
     let cmd = DotfmCommand::from_args();
+    debug!("{:?}", cmd);
     if let Err(err) = run(&cmd) {
         eprintln!("{}", err);
         std::process::exit(1);
