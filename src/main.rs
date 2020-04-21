@@ -81,6 +81,16 @@ struct CloneOptions {
     repo: String,
 }
 
+fn do_clone(path: &DotfilesPath, options: &CloneOptions) -> Result<(), Box<dyn std::error::Error>> {
+    let github_url = format!("git@github.com:{}/{}", options.user, options.repo);
+    Command::new("git")
+        .arg("clone")
+        .arg(&github_url)
+        .arg(path.0.as_str())
+        .status()?;
+    Ok(())
+}
+
 #[derive(Debug, StructOpt)]
 enum SubCommand {
     #[structopt(name = "clone")]
@@ -96,7 +106,16 @@ struct DotfmCommand {
     sub_command: SubCommand,
 }
 
+fn run(command: &DotfmCommand) -> Result<(), Box<dyn std::error::Error>> {
+    match command.sub_command {
+        SubCommand::Clone(ref clone_opts) => do_clone(&command.path, clone_opts),
+    }
+}
+
 fn main() {
     let cmd = DotfmCommand::from_args();
-    println!("{:?}", cmd);
+    if let Err(err) = run(&cmd) {
+        eprintln!("{}", err);
+        std::process::exit(1);
+    }
 }
