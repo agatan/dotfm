@@ -94,16 +94,20 @@ struct CloneOptions {
     user: User,
     #[structopt(default_value = "dotfiles")]
     repo: String,
+    #[structopt(short, long)]
+    shallow: bool,
 }
 
 fn do_clone(path: &DotfilesPath, options: &CloneOptions) -> Result<(), Error> {
     let github_url = format!("git@github.com:{}/{}", options.user, options.repo);
     info!("execute command: git clone {} {}", github_url, path);
-    let status = Command::new("git")
-        .arg("clone")
-        .arg(&github_url)
-        .arg(path.as_str())
-        .status()?;
+    let mut cmd = Command::new("git");
+    cmd.arg("clone").arg(&github_url).arg(path.as_str());
+    if options.shallow {
+        cmd.arg("--depth=1");
+    }
+
+    let status = cmd.status()?;
     if !status.success() {
         return Err(Error::CommandFailed(
             "failed to clone the repository",
