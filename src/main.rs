@@ -1,5 +1,3 @@
-mod error;
-
 use std::convert::From;
 use std::env;
 use std::fmt;
@@ -11,7 +9,7 @@ use ignore::{self, WalkBuilder};
 use log::{debug, info};
 use structopt::StructOpt;
 
-use error::Error;
+use anyhow::{anyhow, Context, Error};
 
 #[derive(Debug)]
 struct DotfilesPath(String);
@@ -109,10 +107,7 @@ fn do_clone(path: &DotfilesPath, options: &CloneOptions) -> Result<(), Error> {
 
     let status = cmd.status()?;
     if !status.success() {
-        return Err(Error::CommandFailed(
-            "failed to clone the repository",
-            status,
-        ));
+        return Err(anyhow!("failed to clone the repository: {}", status));
     }
     Ok(())
 }
@@ -144,7 +139,7 @@ impl Drop for DirGuard {
 #[derive(Debug, StructOpt)]
 enum GitOptions {
     #[structopt(external_subcommand)]
-    Args(Vec<String>)
+    Args(Vec<String>),
 }
 
 fn do_git(path: &DotfilesPath, options: &GitOptions) -> Result<(), Error> {
@@ -152,10 +147,7 @@ fn do_git(path: &DotfilesPath, options: &GitOptions) -> Result<(), Error> {
     let GitOptions::Args(ref args) = *options;
     let status = Command::new("git").args(args).status()?;
     if !status.success() {
-        return Err(Error::CommandFailed(
-            "failed to exec the git command",
-            status,
-        ));
+        return Err(anyhow!("failed to exec the git command: {}", status));
     }
     Ok(())
 }
@@ -168,10 +160,10 @@ struct EditOptions {
 
 fn do_edit(path: &DotfilesPath, options: &EditOptions) -> Result<(), Error> {
     let _guard = DirGuard::new(path)?;
-    let editor = env::var("EDITOR").map_err(|err| Error::Env("EDITOR", err))?;
-    let status = Command::new(editor).arg(&options.filename).status()?;
+    let editor = env::var("EDITOR").context("Failed to fetch $EDITOR")?;
+    let status = Command::new(&editor).arg(&options.filename).status()?;
     if !status.success() {
-        return Err(Error::CommandFailed("failed to edit the file", status));
+        return Err(anyhow!("Failed to open editor {}: {}", editor, status));
     }
     Ok(())
 }
@@ -194,7 +186,7 @@ fn do_commit(path: &DotfilesPath, options: &CommitOptions) -> Result<(), Error> 
         Command::new("git").args(args).status()?
     };
     if !status.success() {
-        return Err(Error::CommandFailed("failed to commit", status));
+        return Err(anyhow!("Failed to commit: {}", status));
     }
     Ok(())
 }
@@ -257,12 +249,9 @@ fn run(command: &DotfmCommand) -> Result<(), Error> {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Error> {
     env_logger::init();
     let cmd = DotfmCommand::from_args();
     debug!("{:?}", cmd);
-    if let Err(err) = run(&cmd) {
-        eprintln!("{}", err);
-        std::process::exit(1);
-    }
+    run(&cmd)
 }
