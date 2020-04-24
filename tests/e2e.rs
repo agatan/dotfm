@@ -12,32 +12,20 @@ fn test_help() {
     command().arg("--help").assert().success();
 }
 
-fn test_clone_command(path: &std::path::Path) -> Command {
-    let mut cmd = command();
-    cmd.arg("-p")
-        .arg(path)
-        .arg("clone")
-        .arg("agatan")
-        .arg("dotfiles")
-        .arg("--shallow");
-    cmd
-}
-
-#[test]
-fn test_clone() {
-    let temp = assert_fs::TempDir::new().unwrap();
-    let clone_into = temp.child("dotfiles");
-    test_clone_command(clone_into.path()).assert().success();
-}
-
 #[test]
 fn test_git_status() {
     let temp = assert_fs::TempDir::new().unwrap();
-    let clone_into = temp.child("dotfiles");
-    test_clone_command(clone_into.path()).assert().success();
+    let dotfiles = temp.child("dotfiles");
+    dotfiles.create_dir_all().unwrap();
+    let status = Command::new("git")
+        .arg("init")
+        .arg(dotfiles.path())
+        .status()
+        .unwrap();
+    assert!(status.success());
     command()
         .arg("-p")
-        .arg(clone_into.path())
+        .arg(dotfiles.path())
         .arg("git")
         .arg("status")
         .assert()
@@ -47,13 +35,25 @@ fn test_git_status() {
 #[test]
 fn test_list() {
     let temp = assert_fs::TempDir::new().unwrap();
-    let clone_into = temp.child("dotfiles");
-    test_clone_command(clone_into.path()).assert().success();
+    let dotfiles = temp.child("dotfiles");
+    dotfiles.create_dir_all().unwrap();
+    let status = Command::new("git")
+        .arg("init")
+        .arg(dotfiles.path())
+        .status()
+        .unwrap();
+    assert!(status.success());
+    dotfiles
+        .child(".dotfmignore")
+        .write_str(".must_be_ignored")
+        .unwrap();
+    dotfiles.child(".must_be_ignored").touch().unwrap();
+    dotfiles.child(".vimrc").touch().unwrap();
     command()
         .arg("-p")
-        .arg(clone_into.path())
+        .arg(dotfiles.path())
         .arg("list")
         .assert()
-        .stdout(predicates::str::contains(".vimrc"))
+        .stdout(predicates::str::is_match(".vimrc").unwrap())
         .success();
 }
