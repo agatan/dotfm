@@ -141,10 +141,16 @@ impl Drop for DirGuard {
     }
 }
 
-fn do_git(path: &DotfilesPath, options: &[String]) -> Result<(), Error> {
-    assert_eq!(options[0], "git");
+#[derive(Debug, StructOpt)]
+enum GitOptions {
+    #[structopt(external_subcommand)]
+    Args(Vec<String>)
+}
+
+fn do_git(path: &DotfilesPath, options: &GitOptions) -> Result<(), Error> {
     let _guard = DirGuard::new(path)?;
-    let status = Command::new("git").args(&options[1..]).status()?;
+    let GitOptions::Args(ref args) = *options;
+    let status = Command::new("git").args(args).status()?;
     if !status.success() {
         return Err(Error::CommandFailed(
             "failed to exec the git command",
@@ -155,6 +161,7 @@ fn do_git(path: &DotfilesPath, options: &[String]) -> Result<(), Error> {
 }
 
 #[derive(Debug, StructOpt)]
+// Edit a file
 struct EditOptions {
     filename: String,
 }
@@ -170,7 +177,6 @@ fn do_edit(path: &DotfilesPath, options: &EditOptions) -> Result<(), Error> {
 }
 
 #[derive(Debug, StructOpt)]
-/// Add all dirty files, then create a commit.
 struct CommitOptions {
     #[structopt(long, short)]
     messege: Option<String>,
@@ -220,11 +226,15 @@ fn do_list(path: &DotfilesPath) -> Result<(), Error> {
 
 #[derive(Debug, StructOpt)]
 enum SubCommand {
+    /// Clone your dotfiles repository
     Clone(CloneOptions),
-    #[structopt(external_subcommand)]
-    Git(Vec<String>),
+    /// Execute git command in dotfiles directory
+    Git(GitOptions),
+    /// Edit your files
     Edit(EditOptions),
+    /// Add all dirty files, then create a commit
     Commit(CommitOptions),
+    /// list target files
     List,
 }
 
