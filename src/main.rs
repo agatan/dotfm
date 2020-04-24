@@ -228,6 +228,12 @@ enum SubCommand {
     Commit(CommitOptions),
     /// list target files
     List,
+    /// Sync local and remote dotfiles
+    Sync,
+    /// Link dotfiles
+    Link,
+    /// Clean symbolic links
+    Clean,
 }
 
 #[derive(Debug, StructOpt)]
@@ -240,12 +246,16 @@ struct DotfmCommand {
 }
 
 fn run(command: &DotfmCommand) -> Result<(), Error> {
+    use SubCommand::*;
     match command.sub_command {
-        SubCommand::Clone(ref clone_opts) => do_clone(&command.path, clone_opts),
-        SubCommand::Git(ref git_opts) => do_git(&command.path, git_opts),
-        SubCommand::Edit(ref edit_opts) => do_edit(&command.path, edit_opts),
-        SubCommand::Commit(ref commit_opts) => do_commit(&command.path, commit_opts),
-        SubCommand::List => do_list(&command.path),
+        Clone(ref clone_opts) => do_clone(&command.path, clone_opts),
+        Git(ref git_opts) => do_git(&command.path, git_opts),
+        Edit(ref edit_opts) => do_edit(&command.path, edit_opts),
+        Commit(ref commit_opts) => do_commit(&command.path, commit_opts),
+        List => do_list(&command.path),
+        Sync => todo!(),
+        Link => todo!(),
+        Clean => todo!(),
     }
 }
 
