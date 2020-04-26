@@ -1,15 +1,17 @@
+mod walk;
+
 use std::convert::From;
 use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use ignore::overrides::OverrideBuilder;
-use ignore::{self, WalkBuilder};
 use log::{debug, info};
 use structopt::StructOpt;
 
 use anyhow::{anyhow, Context, Error};
+
+use walk::Walk;
 
 #[derive(Debug)]
 struct DotfilesPath(String);
@@ -192,28 +194,16 @@ fn do_commit(path: &DotfilesPath, options: &CommitOptions) -> Result<(), Error> 
 }
 
 fn do_list(path: &DotfilesPath) -> Result<(), Error> {
-    let overrides = OverrideBuilder::new(path)
-        .add("!/.git")?
-        .add("!/.dotfmignore")?
-        .build()?;
-    let walk = WalkBuilder::new(path)
-        .hidden(false) // Do not ignore hidden files
-        .add_custom_ignore_filename(".dotfmignore")
-        .overrides(overrides)
-        .sort_by_file_path(|p1, p2| p1.cmp(p2))
-        .build();
+    let walk = Walk::new(path.as_ref())?;
     for p in walk {
         let p = p?;
-        if p.path_is_symlink() || p.path().is_dir() {
-            continue;
-        }
-        let p = p
-            .path()
-            .strip_prefix(path)
-            .expect("each entry must start with the base path");
-        println!("{}", p.display());
+        println!("{}", p);
     }
     Ok(())
+}
+
+fn do_status(path: &DotfilesPath) -> Result<(), Error> {
+    todo!()
 }
 
 #[derive(Debug, StructOpt)]
@@ -228,6 +218,8 @@ enum SubCommand {
     Commit(CommitOptions),
     /// List target files
     List,
+    /// Show dotfiles status
+    Status,
     /// Sync local and remote dotfiles
     Sync,
     /// Link dotfiles
@@ -253,6 +245,7 @@ fn run(command: &DotfmCommand) -> Result<(), Error> {
         Edit(ref edit_opts) => do_edit(&command.path, edit_opts),
         Commit(ref commit_opts) => do_commit(&command.path, commit_opts),
         List => do_list(&command.path),
+        Status => do_status(&command.path),
         Sync => todo!(),
         Link => todo!(),
         Clean => todo!(),
