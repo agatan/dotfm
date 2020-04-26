@@ -1,8 +1,9 @@
-use std::fmt;
 use std::iter::Iterator;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use ignore::overrides::OverrideBuilder;
+
+use crate::entry::Entry;
 
 pub struct Walk<'a> {
     root: &'a Path,
@@ -28,25 +29,6 @@ impl<'a> Walk<'a> {
     }
 }
 
-pub struct Entry<'a> {
-    root: &'a Path,
-    entry_path: PathBuf,
-}
-
-impl<'a> Entry<'a> {
-    pub fn relative_path(&self) -> &Path {
-        self.entry_path
-            .strip_prefix(self.root)
-            .expect("each entry must start with the base path")
-    }
-}
-
-impl<'a> fmt::Display for Entry<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.relative_path().display().fmt(f)
-    }
-}
-
 impl<'a> Iterator for Walk<'a> {
     type Item = Result<Entry<'a>, anyhow::Error>;
 
@@ -59,10 +41,7 @@ impl<'a> Iterator for Walk<'a> {
             if p.path_is_symlink() || p.path().is_dir() {
                 continue;
             }
-            return Some(Ok(Entry {
-                root: self.root,
-                entry_path: p.path().to_owned(),
-            }));
+            return Some(Ok(Entry::new(self.root, p.path().to_owned())));
         }
         None
     }

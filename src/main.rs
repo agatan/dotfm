@@ -1,3 +1,5 @@
+mod command;
+mod entry;
 mod walk;
 
 use std::convert::From;
@@ -11,7 +13,7 @@ use structopt::StructOpt;
 
 use anyhow::{anyhow, Context, Error};
 
-use walk::Walk;
+use crate::walk::Walk;
 
 #[derive(Debug)]
 struct DotfilesPath(String);
@@ -202,10 +204,6 @@ fn do_list(path: &DotfilesPath) -> Result<(), Error> {
     Ok(())
 }
 
-fn do_status(path: &DotfilesPath) -> Result<(), Error> {
-    todo!()
-}
-
 #[derive(Debug, StructOpt)]
 enum SubCommand {
     /// Clone your dotfiles repository
@@ -245,7 +243,7 @@ fn run(command: &DotfmCommand) -> Result<(), Error> {
         Edit(ref edit_opts) => do_edit(&command.path, edit_opts),
         Commit(ref commit_opts) => do_commit(&command.path, commit_opts),
         List => do_list(&command.path),
-        Status => do_status(&command.path),
+        Status => command::do_status(command.path.as_ref()),
         Sync => todo!(),
         Link => todo!(),
         Clean => todo!(),
