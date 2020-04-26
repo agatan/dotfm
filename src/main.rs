@@ -226,7 +226,7 @@ enum SubCommand {
     Edit(EditOptions),
     /// Add all dirty files, then create a commit
     Commit(CommitOptions),
-    /// list target files
+    /// List target files
     List,
     /// Sync local and remote dotfiles
     Sync,
