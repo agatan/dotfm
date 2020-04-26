@@ -1,5 +1,5 @@
 use std::iter::Iterator;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ignore::overrides::OverrideBuilder;
 
@@ -8,10 +8,12 @@ use crate::entry::Entry;
 pub struct Walk<'a> {
     root: &'a Path,
     ignore_walk: ignore::Walk,
+    homedir: PathBuf,
 }
 
 impl<'a> Walk<'a> {
     pub fn new(root: &'a Path) -> Result<Self, anyhow::Error> {
+        let homedir = dirs::home_dir().unwrap_or_default();
         let overrides = OverrideBuilder::new(root)
             .add("!/.git")?
             .add("!/.dotfmignore")?
@@ -25,6 +27,7 @@ impl<'a> Walk<'a> {
         Ok(Walk {
             root,
             ignore_walk: walk,
+            homedir,
         })
     }
 }
@@ -41,7 +44,13 @@ impl<'a> Iterator for Walk<'a> {
             if p.path_is_symlink() || p.path().is_dir() {
                 continue;
             }
-            return Some(Ok(Entry::new(self.root, p.path().to_owned())));
+            let relative_path = p.path().strip_prefix(self.root).unwrap().to_owned();
+            let target_absolute_path = self.homedir.join(&relative_path);
+            return Some(Ok(Entry::new(
+                self.root,
+                relative_path,
+                target_absolute_path,
+            )));
         }
         None
     }
@@ -63,7 +72,7 @@ mod tests {
         tempdir.child(".git").child("info").touch().unwrap();
         let walk = Walk::new(tempdir.path()).unwrap();
         assert_eq!(
-            walk.map(|r| r.map(|e| format!("{}", e)))
+            walk.map(|r| r.map(|e| format!("{}", e.display_relative())))
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
             vec!["file-A", "file-B", "file-C"]

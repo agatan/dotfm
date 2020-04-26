@@ -199,7 +199,7 @@ fn do_list(path: &DotfilesPath) -> Result<(), Error> {
     let walk = Walk::new(path.as_ref())?;
     for p in walk {
         let p = p?;
-        println!("{}", p);
+        println!("{}", p.display_relative());
     }
     Ok(())
 }

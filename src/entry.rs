@@ -3,23 +3,32 @@ use std::path::{Path, PathBuf};
 
 pub struct Entry<'a> {
     root: &'a Path,
-    entry_path: PathBuf,
+    relative_path: PathBuf,
+    target_absolute_path: PathBuf,
 }
 
 impl<'a> Entry<'a> {
-    pub fn new(root: &'a Path, entry_path: PathBuf) -> Self {
-        Entry { root, entry_path }
+    pub fn new(root: &'a Path, relative_path: PathBuf, target_absolute_path: PathBuf) -> Self {
+        Entry {
+            root,
+            relative_path,
+            target_absolute_path,
+        }
     }
 
-    pub fn relative_path(&self) -> &Path {
-        self.entry_path
-            .strip_prefix(self.root)
-            .expect("each entry must start with the base path")
+    pub fn absolute_path(&self) -> PathBuf {
+        self.root.join(&self.relative_path)
+    }
+
+    pub fn display_relative(&self) -> DisplayRelative {
+        DisplayRelative(self)
     }
 }
 
-impl<'a> fmt::Display for Entry<'a> {
+pub struct DisplayRelative<'a>(&'a Entry<'a>);
+
+impl<'a> fmt::Display for DisplayRelative<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.relative_path().display().fmt(f)
+        self.0.relative_path.display().fmt(f)
     }
 }
