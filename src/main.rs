@@ -245,7 +245,7 @@ fn run(command: &DotfmCommand) -> Result<(), Error> {
         List => do_list(&command.path),
         Status => command::do_status(command.path.as_ref()),
         Sync => todo!(),
-        Link => todo!(),
+        Link => command::do_link(&command.path),
         Clean => todo!(),
     }
 }
