@@ -13,6 +13,7 @@ log = "0.4"
 env_logger = "0.7"
 ignore = "0.4"
 anyhow = "1"
+tabwriter = "1"
 
 [dev-dependencies]
 assert_cmd = "1"

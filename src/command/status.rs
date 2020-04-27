@@ -1,3 +1,4 @@
+use std::io::{self, Write};
 use std::path::Path;
 
 use crate::walk::Walk;
@@ -19,13 +20,17 @@ pub fn do_status(path: &Path) -> Result<(), anyhow::Error> {
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let mut writer = tabwriter::TabWriter::new(io::stdout());
+    writer.write_all(b"SOURCE\tDESTINATION\tSTATUS\n")?;
     for st in status {
-        println!(
-            "{}\t=>\t{}\t({})",
+        writeln!(
+            writer,
+            "{}\t{}\t{}",
             st.entry_path,
             st.target_path,
             if st.is_linked { "linked" } else { "not linked" }
-        )
+        )?;
     }
+    writer.flush()?;
     Ok(())
 }
