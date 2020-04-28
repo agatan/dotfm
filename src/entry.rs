@@ -66,6 +66,11 @@ impl<'a> Entry<'a> {
                 self.target_absolute_path.display()
             ))
     }
+
+    pub fn unlink(&self) -> Result<(), anyhow::Error> {
+        std::fs::remove_file(&self.target_absolute_path)?;
+        Ok(())
+    }
 }
 
 pub struct DisplayRelative<'a>(&'a Entry<'a>);
