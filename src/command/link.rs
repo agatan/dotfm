@@ -1,9 +1,8 @@
-use std::path::Path;
-
+use crate::config::Config;
 use crate::walk::Walk;
 
-pub fn do_link(path: impl AsRef<Path>) -> Result<(), anyhow::Error> {
-    let walk = Walk::new(path.as_ref())?;
+pub fn do_link(config: &Config) -> Result<(), anyhow::Error> {
+    let walk = Walk::new(config.root_path(), config.home_dir())?;
     for entry in walk {
         let entry = entry?;
         entry.link()?;
@@ -19,11 +18,10 @@ mod tests {
     #[test]
     fn test_do_link() {
         let homedir = assert_fs::TempDir::new().unwrap();
-        std::env::set_var("HOME", homedir.path().as_os_str());
         let tempdir = assert_fs::TempDir::new().unwrap();
-        assert_eq!(dirs::home_dir().unwrap(), homedir.path());
         tempdir.child(".vimrc").touch().unwrap();
-        do_link(tempdir.path()).unwrap();
+        let config = Config::new(tempdir.path(), homedir.path().to_owned());
+        do_link(&config).unwrap();
         assert_eq!(
             std::fs::read_link(homedir.child(".vimrc").path()).unwrap(),
             tempdir.child(".vimrc").path(),

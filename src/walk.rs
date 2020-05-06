@@ -1,5 +1,5 @@
 use std::iter::Iterator;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use ignore::overrides::OverrideBuilder;
 
@@ -8,12 +8,11 @@ use crate::entry::Entry;
 pub struct Walk<'a> {
     root: &'a Path,
     ignore_walk: ignore::Walk,
-    homedir: PathBuf,
+    home_dir: &'a Path,
 }
 
 impl<'a> Walk<'a> {
-    pub fn new(root: &'a Path) -> Result<Self, anyhow::Error> {
-        let homedir = dirs::home_dir().unwrap_or_default();
+    pub fn new(root: &'a Path, home_dir: &'a Path) -> Result<Self, anyhow::Error> {
         let overrides = OverrideBuilder::new(root)
             .add("!/.git")?
             .add("!/.dotfmignore")?
@@ -27,7 +26,7 @@ impl<'a> Walk<'a> {
         Ok(Walk {
             root,
             ignore_walk: walk,
-            homedir,
+            home_dir,
         })
     }
 }
@@ -45,7 +44,7 @@ impl<'a> Iterator for Walk<'a> {
                 continue;
             }
             let relative_path = p.path().strip_prefix(self.root).unwrap().to_owned();
-            let target_absolute_path = self.homedir.join(&relative_path);
+            let target_absolute_path = self.home_dir.join(&relative_path);
             return Some(Ok(Entry::new(
                 self.root,
                 relative_path,
@@ -64,13 +63,14 @@ mod tests {
 
     #[test]
     fn test_walk_files() {
+        let home_dir = assert_fs::TempDir::new().unwrap();
         let tempdir = assert_fs::TempDir::new().unwrap();
         tempdir.child("file-C").touch().unwrap();
         tempdir.child("file-B").touch().unwrap();
         tempdir.child("file-A").touch().unwrap();
         tempdir.child(".git").create_dir_all().unwrap();
         tempdir.child(".git").child("info").touch().unwrap();
-        let walk = Walk::new(tempdir.path()).unwrap();
+        let walk = Walk::new(tempdir.path(), home_dir.path()).unwrap();
         assert_eq!(
             walk.map(|r| r.map(|e| format!("{}", e.display_relative())))
                 .collect::<Result<Vec<_>, _>>()

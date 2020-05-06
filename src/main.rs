@@ -1,4 +1,5 @@
 mod command;
+mod config;
 mod entry;
 mod walk;
 
@@ -13,6 +14,7 @@ use structopt::StructOpt;
 
 use anyhow::{anyhow, Context, Error};
 
+use crate::config::Config;
 use crate::walk::Walk;
 
 #[derive(Debug)]
@@ -195,8 +197,8 @@ fn do_commit(path: &DotfilesPath, options: &CommitOptions) -> Result<(), Error> 
     Ok(())
 }
 
-fn do_list(path: &DotfilesPath) -> Result<(), Error> {
-    let walk = Walk::new(path.as_ref())?;
+fn do_list(config: &Config) -> Result<(), Error> {
+    let walk = Walk::new(config.root_path(), config.home_dir())?;
     for p in walk {
         let p = p?;
         println!("{}", p.display_relative());
@@ -236,17 +238,19 @@ struct DotfmCommand {
 }
 
 fn run(command: &DotfmCommand) -> Result<(), Error> {
+    let config = Config::new(command.path.as_ref(), dirs::home_dir().unwrap_or_default());
+
     use SubCommand::*;
     match command.sub_command {
         Clone(ref clone_opts) => do_clone(&command.path, clone_opts),
         Git(ref git_opts) => do_git(&command.path, git_opts),
         Edit(ref edit_opts) => do_edit(&command.path, edit_opts),
         Commit(ref commit_opts) => do_commit(&command.path, commit_opts),
-        List => do_list(&command.path),
-        Status => command::do_status(command.path.as_ref()),
+        List => do_list(&config),
+        Status => command::do_status(&config),
         Sync => todo!(),
-        Link => command::do_link(&command.path),
-        Clean => command::do_clean(&command.path),
+        Link => command::do_link(&config),
+        Clean => command::do_clean(&config),
     }
 }
 

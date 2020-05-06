@@ -1,6 +1,6 @@
 use std::io::{self, Write};
-use std::path::Path;
 
+use crate::config::Config;
 use crate::walk::Walk;
 
 struct Status {
@@ -9,8 +9,8 @@ struct Status {
     is_linked: bool,
 }
 
-pub fn do_status(path: &Path) -> Result<(), anyhow::Error> {
-    let walk = Walk::new(path)?;
+pub fn do_status(config: &Config) -> Result<(), anyhow::Error> {
+    let walk = Walk::new(config.root_path(), config.home_dir())?;
     let status = walk
         .map(|result| {
             result.map(|entry| Status {
