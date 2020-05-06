@@ -1,12 +1,13 @@
 mod command;
 mod config;
 mod entry;
+mod util;
 mod walk;
 
 use std::convert::From;
 use std::env;
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use log::{debug, info};
@@ -15,6 +16,7 @@ use structopt::StructOpt;
 use anyhow::{anyhow, Context, Error};
 
 use crate::config::Config;
+use crate::util::DirGuard;
 use crate::walk::Walk;
 
 #[derive(Debug)]
@@ -116,30 +118,6 @@ fn do_clone(path: &DotfilesPath, options: &CloneOptions) -> Result<(), Error> {
         return Err(anyhow!("failed to clone the repository: {}", status));
     }
     Ok(())
-}
-
-struct DirGuard {
-    original: PathBuf,
-}
-
-impl DirGuard {
-    fn new<P: AsRef<Path>>(in_dir: P) -> Result<Self, Error> {
-        let original = env::current_dir()?;
-        debug!(
-            "move from {} to {}",
-            original.to_string_lossy(),
-            in_dir.as_ref().to_string_lossy()
-        );
-        env::set_current_dir(in_dir.as_ref())?;
-        Ok(Self { original })
-    }
-}
-
-impl Drop for DirGuard {
-    fn drop(&mut self) {
-        debug!("back to {}", self.original.to_string_lossy());
-        env::set_current_dir(self.original.as_path()).expect("failed to reset current directory")
-    }
 }
 
 #[derive(Debug, StructOpt)]
@@ -248,7 +226,7 @@ fn run(command: &DotfmCommand) -> Result<(), Error> {
         Commit(ref commit_opts) => do_commit(&command.path, commit_opts),
         List => do_list(&config),
         Status => command::do_status(&config),
-        Sync => todo!(),
+        Sync => command::do_sync(&config),
         Link => command::do_link(&config),
         Clean => command::do_clean(&config),
     }
