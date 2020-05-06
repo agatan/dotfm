@@ -1,5 +1,7 @@
 ## dotfm
 
+![CI](https://github.com/agatan/dotfm/workflows/CI/badge.svg)
+
 A dotfiles management tool.
 
 
