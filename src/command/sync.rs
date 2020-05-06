@@ -1,5 +1,4 @@
 use std::ffi::OsStr;
-use std::path::Path;
 use std::process::{Command, ExitStatus};
 
 use crate::config::Config;
