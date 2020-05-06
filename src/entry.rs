@@ -38,22 +38,31 @@ impl<'a> Entry<'a> {
     }
 
     fn create_target_parent_dirs(&self) -> Result<(), anyhow::Error> {
-        match self.target_absolute_path.parent() {
-            None => Ok(()),
-            Some(p) => std::fs::create_dir_all(p).context("Failed to create parent directories"),
+        if let Some(p) = self.target_absolute_path.parent() {
+            if let Err(err) = std::fs::create_dir_all(p) {
+                if err.kind() != std::io::ErrorKind::AlreadyExists {
+                    return Err(err.into());
+                }
+            }
         }
+        Ok(())
     }
 
     #[cfg(not(target_os = "windows"))]
     pub fn link(&self) -> Result<(), anyhow::Error> {
         self.create_target_parent_dirs()?;
-        std::os::unix::fs::symlink(self.absolute_path(), &self.target_absolute_path).context(
-            format!(
-                "Failed to link {} to {}",
-                self.absolute_path().display(),
-                self.target_absolute_path.display()
-            ),
-        )
+        if let Err(err) =
+            std::os::unix::fs::symlink(self.absolute_path(), &self.target_absolute_path)
+        {
+            if err.kind() != std::io::ErrorKind::AlreadyExists {
+                return Err(err).context(format!(
+                    "Failed to link {} to {}",
+                    self.absolute_path().display(),
+                    self.target_absolute_path.display()
+                ));
+            }
+        }
+        Ok(())
     }
 
     #[cfg(target_os = "windows")]
@@ -68,7 +77,14 @@ impl<'a> Entry<'a> {
     }
 
     pub fn unlink(&self) -> Result<(), anyhow::Error> {
-        std::fs::remove_file(&self.target_absolute_path)?;
+        if let Err(err) = std::fs::remove_file(&self.target_absolute_path) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                return Err(err).context(format!(
+                    "Failed to unlink {}",
+                    self.target_absolute_path.display()
+                ));
+            }
+        }
         Ok(())
     }
 }
