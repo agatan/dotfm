@@ -6,7 +6,7 @@ A dotfiles management tool.
 
 
 ```
-dotfm 0.1.0
+dotfm 0.1.1
 
 USAGE:
     dotfm [OPTIONS] <SUBCOMMAND>
