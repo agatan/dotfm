@@ -9,7 +9,7 @@ pub struct Config<'a> {
 impl<'a> Config<'a> {
     pub fn new(root_path: &'a Path, home_dir: PathBuf) -> Self {
         Self {
-            root_path,
+            root_path: root_path,
             home_dir,
         }
     }
